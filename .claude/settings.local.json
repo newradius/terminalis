@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go version:*)",
+      "Bash(wails version:*)",
+      "Bash(go install:*)",
+      "Bash(cp:*)",
+      "Bash(sed:*)",
+      "Bash(mkdir:*)",
+      "Bash(go mod:*)",
+      "Bash(go:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(wails:*)",
+      "WebSearch",
+      "Bash(xargs cat:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(npx vite:*)",
+      "Bash(wsl:*)",
+      "Bash(docker:*)",
+      "Bash(MSYS_NO_PATHCONV=1 docker run:*)",
+      "Bash(rm:*)"
+    ]
+  }
+}
