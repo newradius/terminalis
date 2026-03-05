@@ -215,6 +215,32 @@ func (s *Store) buildTree(parentID string) []models.TreeNode {
 	return nodes
 }
 
+// ExportAll returns a copy of all session data for export.
+func (s *Store) ExportAll() models.SessionData {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := models.SessionData{
+		Sessions: make([]models.Session, len(s.data.Sessions)),
+		Folders:  make([]models.Folder, len(s.data.Folders)),
+	}
+	copy(result.Sessions, s.data.Sessions)
+	copy(result.Folders, s.data.Folders)
+	return result
+}
+
+// GetFolderByID returns a pointer to a folder by its ID.
+func (s *Store) GetFolderByID(id string) *models.Folder {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for i := range s.data.Folders {
+		if s.data.Folders[i].ID == id {
+			f := s.data.Folders[i]
+			return &f
+		}
+	}
+	return nil
+}
+
 // MoveSession moves a session to a different folder (empty string = root).
 func (s *Store) MoveSession(sessionID, newFolderID string) error {
 	s.mu.Lock()

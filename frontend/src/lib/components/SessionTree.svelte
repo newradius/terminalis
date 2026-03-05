@@ -2,10 +2,13 @@
   import { sessionTree, showSessionForm, editingSession, showFolderForm, editingFolder, selectedFolderId } from "../stores/sessions";
   import { createTab } from "../stores/terminals";
   import type { TreeNode } from "../types";
-  import { GetSessionTree, ToggleFolderExpanded, DeleteSession, DeleteFolder, MoveSession, MoveFolder, ConnectSessionExternal } from "../../../wailsjs/go/main/App";
+  import { GetSessionTree, ToggleFolderExpanded, DeleteSession, DeleteFolder, MoveSession, MoveFolder, ConnectSessionExternal, DuplicateSession } from "../../../wailsjs/go/main/App";
   import { onMount } from "svelte";
 
+  export let searchQuery: string = "";
+
   let contextMenu: { x: number; y: number; node: TreeNode } | null = null;
+  let confirmDelete: { node: TreeNode } | null = null;
 
   // Drag & drop state
   let dragItem: { id: string; type: "session" | "folder" } | null = null;
@@ -19,6 +22,29 @@
     const tree = await GetSessionTree();
     sessionTree.set(tree || []);
   }
+
+  // Filter tree based on search
+  function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
+    if (!query.trim()) return nodes;
+    const q = query.toLowerCase();
+    const result: TreeNode[] = [];
+    for (const node of nodes) {
+      if (node.type === "session") {
+        const match = node.name.toLowerCase().includes(q) ||
+          (node.session?.host || "").toLowerCase().includes(q) ||
+          (node.session?.username || "").toLowerCase().includes(q);
+        if (match) result.push(node);
+      } else if (node.type === "folder") {
+        const filteredChildren = filterTree(node.children || [], query);
+        if (filteredChildren.length > 0) {
+          result.push({ ...node, children: filteredChildren, expanded: true });
+        }
+      }
+    }
+    return result;
+  }
+
+  $: displayTree = filterTree($sessionTree, searchQuery);
 
   async function toggleFolder(id: string) {
     await ToggleFolderExpanded(id);
@@ -34,7 +60,6 @@
   async function connectToSession(node: TreeNode) {
     if (!node.session) return;
 
-    // Check if this session should use an external terminal
     if (node.session.terminalType === "system") {
       try {
         await ConnectSessionExternal(node.session.id);
@@ -49,8 +74,6 @@
     }
 
     const tabId = createTab(node.name, node.session.id);
-
-    // Dispatch custom event to trigger connection
     window.dispatchEvent(
       new CustomEvent("connect-session", {
         detail: { tabId, session: node.session },
@@ -80,15 +103,36 @@
     closeContextMenu();
   }
 
-  async function deleteNode() {
+  function requestDelete() {
     if (!contextMenu) return;
-    const node = contextMenu.node;
+    confirmDelete = { node: contextMenu.node };
+    closeContextMenu();
+  }
+
+  async function executeDelete() {
+    if (!confirmDelete) return;
+    const node = confirmDelete.node;
     if (node.type === "session") {
       await DeleteSession(node.id);
     } else {
       await DeleteFolder(node.id);
     }
     await refreshTree();
+    confirmDelete = null;
+  }
+
+  function cancelDelete() {
+    confirmDelete = null;
+  }
+
+  async function duplicateNode() {
+    if (!contextMenu || contextMenu.node.type !== "session") return;
+    try {
+      await DuplicateSession(contextMenu.node.id);
+      await refreshTree();
+    } catch (err: any) {
+      console.error("Duplicate failed:", err);
+    }
     closeContextMenu();
   }
 
@@ -97,6 +141,17 @@
     selectedFolderId.set(contextMenu.node.id);
     showSessionForm.set(true);
     closeContextMenu();
+  }
+
+  // Count children in a folder node
+  function countChildren(node: TreeNode): number {
+    if (!node.children) return 0;
+    let count = 0;
+    for (const child of node.children) {
+      if (child.type === "session") count++;
+      if (child.type === "folder") count += countChildren(child);
+    }
+    return count;
   }
 
   // ---- Drag & Drop ----
@@ -110,7 +165,6 @@
 
   function handleDragOver(e: DragEvent, folderId: string) {
     if (!dragItem) return;
-    // Don't allow dropping a folder onto itself
     if (dragItem.type === "folder" && dragItem.id === folderId) return;
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
@@ -153,7 +207,7 @@
 <svelte:window on:click={closeContextMenu} />
 
 <div class="tree">
-  {#each $sessionTree as node}
+  {#each displayTree as node}
     {#if node.type === "folder"}
       <div class="tree-folder">
         <button
@@ -175,6 +229,7 @@
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
           <span class="node-name">{node.name}</span>
+          <span class="folder-count">{countChildren(node)}</span>
         </button>
         {#if node.expanded && node.children}
           <div class="tree-children">
@@ -200,6 +255,7 @@
                       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                     </svg>
                     <span class="node-name">{child.name}</span>
+                    <span class="folder-count">{countChildren(child)}</span>
                   </button>
                   {#if child.expanded && child.children}
                     <div class="tree-children">
@@ -259,18 +315,48 @@
       </button>
     {/if}
   {/each}
+
+  {#if displayTree.length === 0 && searchQuery}
+    <div class="no-results">No sessions match "{searchQuery}"</div>
+  {/if}
 </div>
 
 {#if contextMenu}
   <div class="context-menu" style="left: {contextMenu.x}px; top: {contextMenu.y}px">
     {#if contextMenu.node.type === "session"}
       <button on:click={() => { connectToSession(contextMenu.node); closeContextMenu(); }}>Connect</button>
+      <button on:click={duplicateNode}>Duplicate</button>
     {/if}
     {#if contextMenu.node.type === "folder"}
       <button on:click={addSessionToFolder}>Add Session</button>
     {/if}
     <button on:click={editNode}>Edit</button>
-    <button class="danger" on:click={deleteNode}>Delete</button>
+    <button class="danger" on:click={requestDelete}>Delete</button>
+  </div>
+{/if}
+
+{#if confirmDelete}
+  <div class="confirm-overlay" on:click|self={cancelDelete}>
+    <div class="confirm-dialog">
+      <div class="confirm-header">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <h3>Delete {confirmDelete.node.type === "folder" ? "Folder" : "Session"}</h3>
+      </div>
+      <p>
+        Are you sure you want to delete <strong>{confirmDelete.node.name}</strong>?
+        {#if confirmDelete.node.type === "folder"}
+          Sessions inside will be moved to the root level.
+        {/if}
+      </p>
+      <div class="confirm-actions">
+        <button class="btn-secondary" on:click={cancelDelete}>Cancel</button>
+        <button class="btn-danger" on:click={executeDelete}>Delete</button>
+      </div>
+    </div>
   </div>
 {/if}
 
@@ -344,6 +430,24 @@
     flex-shrink: 0;
   }
 
+  .folder-count {
+    font-size: 10px;
+    color: #666;
+    background: #252640;
+    padding: 0 5px;
+    border-radius: 6px;
+    margin-left: auto;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .no-results {
+    padding: 20px 16px;
+    color: #555;
+    font-size: 13px;
+    text-align: center;
+  }
+
   .context-menu {
     position: fixed;
     background: #2a2b3d;
@@ -376,5 +480,79 @@
   .context-menu button.danger:hover {
     background: #5c2020;
     color: #ff6b6b;
+  }
+
+  .confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    backdrop-filter: blur(2px);
+  }
+
+  .confirm-dialog {
+    background: #1e1f33;
+    border: 1px solid #2a2b3d;
+    border-radius: 12px;
+    width: 360px;
+    padding: 20px 24px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+
+  .confirm-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .confirm-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #e0e0e0;
+  }
+
+  .confirm-dialog p {
+    color: #999;
+    font-size: 13px;
+    margin: 0 0 16px;
+    line-height: 1.5;
+  }
+
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .btn-secondary {
+    background: #2a2b3d;
+    border: none;
+    border-radius: 6px;
+    color: #ccc;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .btn-secondary:hover {
+    background: #3a3b4d;
+  }
+
+  .btn-danger {
+    background: #5c2020;
+    border: none;
+    border-radius: 6px;
+    color: #ff6b6b;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .btn-danger:hover {
+    background: #6c2828;
   }
 </style>

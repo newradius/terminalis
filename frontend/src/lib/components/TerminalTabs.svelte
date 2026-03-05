@@ -16,6 +16,14 @@
     await DisconnectTab(id);
     closeTab(id);
   }
+
+  // Middle-click to close tab
+  function handleMouseDown(e: MouseEvent, id: string) {
+    if (e.button === 1) {
+      e.preventDefault();
+      DisconnectTab(id).then(() => closeTab(id));
+    }
+  }
 </script>
 
 <div class="terminal-area">
@@ -26,6 +34,7 @@
           class="tab"
           class:active={$activeTabId === tab.id}
           on:click={() => selectTab(tab.id)}
+          on:mousedown={(e) => handleMouseDown(e, tab.id)}
         >
           <span class="tab-status" class:connected={tab.connected}></span>
           <span class="tab-title">{tab.title}</span>
@@ -37,6 +46,12 @@
           </button>
         </button>
       {/each}
+      <button class="tab-new" on:click={openLocalTerminal} title="New Terminal (Ctrl+T)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
     </div>
     <div class="terminal-panels">
       {#each $tabs as tab (tab.id)}
@@ -54,6 +69,12 @@
       <button class="open-terminal-btn" on:click={openLocalTerminal}>
         Open Local Terminal
       </button>
+      <div class="shortcuts-hint">
+        <span><kbd>Ctrl</kbd>+<kbd>T</kbd> New terminal</span>
+        <span><kbd>Ctrl</kbd>+<kbd>W</kbd> Close tab</span>
+        <span><kbd>Ctrl</kbd>+<kbd>Tab</kbd> Next tab</span>
+        <span><kbd>Ctrl</kbd>+<kbd>K</kbd> Search</span>
+      </div>
     </div>
   {/if}
 </div>
@@ -140,6 +161,22 @@
     background: rgba(255, 107, 107, 0.1);
   }
 
+  .tab-new {
+    background: none;
+    border: none;
+    color: #555;
+    cursor: pointer;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .tab-new:hover {
+    color: #ccc;
+    background: #252640;
+  }
+
   .terminal-panels {
     flex: 1;
     overflow: hidden;
@@ -180,5 +217,29 @@
 
   .open-terminal-btn:hover {
     background: #5b7bf8;
+  }
+
+  .shortcuts-hint {
+    display: flex;
+    gap: 16px;
+    margin-top: 20px;
+    font-size: 11px;
+    color: #444;
+  }
+
+  .shortcuts-hint span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  :global(kbd) {
+    background: #2a2b3d;
+    color: #888;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: inherit;
+    border: 1px solid #3a3b4d;
   }
 </style>

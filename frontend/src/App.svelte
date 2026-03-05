@@ -9,19 +9,24 @@
   import SettingsForm from "./lib/components/SettingsForm.svelte";
   import { showSessionForm, showFolderForm, showSettings } from "./lib/stores/sessions";
   import { loadConfig } from "./lib/stores/config";
-  import { createTab, closeTab, setTabConnected } from "./lib/stores/terminals";
-  import { ConnectSession, QuickConnect as QuickConnectApi, OpenLocalShell } from "../wailsjs/go/main/App";
+  import { createTab, closeTab, setTabConnected, tabs, activeTabId } from "./lib/stores/terminals";
+  import { ConnectSession, QuickConnect as QuickConnectApi, OpenLocalShell, DisconnectTab } from "../wailsjs/go/main/App";
   import { EventsOn } from "../wailsjs/runtime/runtime";
   import type { HostKeyInfo, Session } from "./lib/types";
   import { onMount } from "svelte";
 
   let hostKeyInfo: HostKeyInfo | null = null;
   let passwordPrompt: { tabId: string; session: Session } | null = null;
-  let connectionError: string | null = null;
+  let toast: { message: string; type: "error" | "success" } | null = null;
 
   function showError(msg: string) {
-    connectionError = msg;
-    setTimeout(() => { connectionError = null; }, 5000);
+    toast = { message: msg, type: "error" };
+    setTimeout(() => { toast = null; }, 5000);
+  }
+
+  function showSuccess(msg: string) {
+    toast = { message: msg, type: "success" };
+    setTimeout(() => { toast = null; }, 3000);
   }
 
   onMount(() => {
@@ -75,6 +80,48 @@
     window.addEventListener("connection-error", ((e: CustomEvent) => {
       showError(e.detail?.message || "Connection error");
     }) as EventListener);
+
+    window.addEventListener("toast-success", ((e: CustomEvent) => {
+      showSuccess(e.detail?.message || "Success");
+    }) as EventListener);
+
+    // Keyboard shortcuts
+    window.addEventListener("keydown", (e: KeyboardEvent) => {
+      // Ctrl+T: Open new local terminal
+      if (e.ctrlKey && e.key === "t" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("open-local-terminal", { detail: {} }));
+      }
+      // Ctrl+W: Close active tab
+      if (e.ctrlKey && e.key === "w" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        let currentId: string | null = null;
+        activeTabId.subscribe(v => currentId = v)();
+        if (currentId) {
+          DisconnectTab(currentId);
+          closeTab(currentId);
+        }
+      }
+      // Ctrl+Tab / Ctrl+Shift+Tab: Cycle tabs
+      if (e.ctrlKey && e.key === "Tab") {
+        e.preventDefault();
+        let currentTabs: any[] = [];
+        tabs.subscribe(v => currentTabs = v)();
+        if (currentTabs.length <= 1) return;
+        let currentId: string | null = null;
+        activeTabId.subscribe(v => currentId = v)();
+        const idx = currentTabs.findIndex(t => t.id === currentId);
+        const next = e.shiftKey
+          ? (idx - 1 + currentTabs.length) % currentTabs.length
+          : (idx + 1) % currentTabs.length;
+        activeTabId.set(currentTabs[next].id);
+      }
+      // Ctrl+K: Focus search in sidebar
+      if (e.ctrlKey && e.key === "k" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("focus-search"));
+      }
+    });
   });
 
   function doConnect(tabId: string, sessionId: string, password: string) {
@@ -139,10 +186,10 @@
   />
 {/if}
 
-{#if connectionError}
-  <div class="toast-error">
-    <span>{connectionError}</span>
-    <button on:click={() => (connectionError = null)}>&times;</button>
+{#if toast}
+  <div class="toast" class:toast-error={toast.type === "error"} class:toast-success={toast.type === "success"}>
+    <span>{toast.message}</span>
+    <button on:click={() => (toast = null)}>&times;</button>
   </div>
 {/if}
 
@@ -179,13 +226,10 @@
     overflow: hidden;
   }
 
-  :global(.toast-error) {
+  .toast {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background: #5c2020;
-    border: 1px solid #ff6b6b;
-    color: #ff6b6b;
     padding: 12px 16px;
     border-radius: 8px;
     display: flex;
@@ -195,6 +239,18 @@
     font-size: 13px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     animation: slideIn 0.3s ease;
+  }
+
+  .toast-error {
+    background: #5c2020;
+    border: 1px solid #ff6b6b;
+    color: #ff6b6b;
+  }
+
+  .toast-success {
+    background: #1a3a1a;
+    border: 1px solid #45a049;
+    color: #66bb6a;
   }
 
   @keyframes slideIn {
@@ -208,10 +264,10 @@
     }
   }
 
-  :global(.toast-error button) {
+  .toast button {
     background: none;
     border: none;
-    color: #ff6b6b;
+    color: inherit;
     font-size: 18px;
     cursor: pointer;
     padding: 0;

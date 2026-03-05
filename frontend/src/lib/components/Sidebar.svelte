@@ -1,9 +1,20 @@
 <script lang="ts">
   import SessionTree from "./SessionTree.svelte";
   import { showSessionForm, showFolderForm, selectedFolderId, sessionTree, showSettings } from "../stores/sessions";
-  import { MoveSession, MoveFolder, GetSessionTree } from "../../../wailsjs/go/main/App";
+  import { MoveSession, MoveFolder, GetSessionTree, ExportSessions, ImportSessions } from "../../../wailsjs/go/main/App";
+  import { onMount } from "svelte";
 
   let dropTargetRoot = false;
+  let searchQuery = "";
+  let searchInput: HTMLInputElement;
+  let sidebarWidth = 260;
+  let isResizing = false;
+
+  onMount(() => {
+    window.addEventListener("focus-search", () => {
+      searchInput?.focus();
+    });
+  });
 
   function addSession() {
     selectedFolderId.set("");
@@ -18,8 +29,39 @@
     window.dispatchEvent(new CustomEvent("open-local-terminal", { detail: {} }));
   }
 
+  async function handleExport() {
+    try {
+      const path = await ExportSessions();
+      if (path) {
+        window.dispatchEvent(new CustomEvent("toast-success", {
+          detail: { message: "Sessions exported successfully" },
+        }));
+      }
+    } catch (err: any) {
+      window.dispatchEvent(new CustomEvent("connection-error", {
+        detail: { message: "Export failed: " + err },
+      }));
+    }
+  }
+
+  async function handleImport() {
+    try {
+      const count = await ImportSessions();
+      if (count > 0) {
+        const tree = await GetSessionTree();
+        sessionTree.set(tree || []);
+        window.dispatchEvent(new CustomEvent("toast-success", {
+          detail: { message: `Imported ${count} items successfully` },
+        }));
+      }
+    } catch (err: any) {
+      window.dispatchEvent(new CustomEvent("connection-error", {
+        detail: { message: "Import failed: " + err },
+      }));
+    }
+  }
+
   function handleRootDragOver(e: DragEvent) {
-    // Only act as drop target when dragging over empty space (not bubbled from tree items)
     const target = e.target as HTMLElement;
     if (target.closest(".tree-item")) return;
     e.preventDefault();
@@ -56,13 +98,42 @@
       console.error("Move to root failed:", err);
     }
   }
+
+  // Resize handlers
+  function startResize(e: MouseEvent) {
+    isResizing = true;
+    e.preventDefault();
+    const onMove = (ev: MouseEvent) => {
+      sidebarWidth = Math.max(180, Math.min(500, ev.clientX));
+    };
+    const onUp = () => {
+      isResizing = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  // Count total sessions
+  function countSessions(nodes: any[]): number {
+    let count = 0;
+    for (const n of nodes) {
+      if (n.type === "session") count++;
+      if (n.children) count += countSessions(n.children);
+    }
+    return count;
+  }
+
+  $: totalSessions = countSessions($sessionTree);
 </script>
 
-<aside class="sidebar">
+<aside class="sidebar" style="width: {sidebarWidth}px; min-width: {sidebarWidth}px">
   <div class="sidebar-header">
     <span class="sidebar-title">Sessions</span>
+    <span class="session-count">{totalSessions}</span>
     <div class="sidebar-actions">
-      <button class="icon-btn" on:click={openLocalTerminal} title="Open Terminal">
+      <button class="icon-btn" on:click={openLocalTerminal} title="Open Terminal (Ctrl+T)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="4 17 10 11 4 5"/>
           <line x1="12" y1="19" x2="20" y2="19"/>
@@ -83,6 +154,26 @@
       </button>
     </div>
   </div>
+  <div class="search-bar">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    <input
+      type="text"
+      bind:value={searchQuery}
+      bind:this={searchInput}
+      placeholder="Search sessions... (Ctrl+K)"
+    />
+    {#if searchQuery}
+      <button class="clear-search" on:click={() => searchQuery = ""}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    {/if}
+  </div>
   <div
     class="sidebar-content"
     class:drop-target-root={dropTargetRoot}
@@ -90,9 +181,24 @@
     on:dragleave={handleRootDragLeave}
     on:drop={handleRootDrop}
   >
-    <SessionTree />
+    <SessionTree {searchQuery} />
   </div>
   <div class="sidebar-footer">
+    <button class="icon-btn" on:click={handleImport} title="Import Sessions">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </button>
+    <button class="icon-btn" on:click={handleExport} title="Export Sessions">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    </button>
+    <div class="spacer"></div>
     <button class="icon-btn" on:click={() => showSettings.set(true)} title="Settings">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"/>
@@ -100,23 +206,25 @@
       </svg>
     </button>
   </div>
+  <div class="resize-handle" on:mousedown={startResize}></div>
 </aside>
 
 <style>
   .sidebar {
     width: 260px;
-    min-width: 200px;
     background: #1a1b2e;
     border-right: 1px solid #2a2b3d;
     display: flex;
     flex-direction: column;
     height: 100%;
+    position: relative;
+    flex-shrink: 0;
   }
 
   .sidebar-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 6px;
     padding: 12px 16px;
     border-bottom: 1px solid #2a2b3d;
   }
@@ -129,9 +237,19 @@
     letter-spacing: 0.5px;
   }
 
+  .session-count {
+    font-size: 11px;
+    color: #888;
+    background: #2a2b3d;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+
   .sidebar-actions {
     display: flex;
     gap: 4px;
+    margin-left: auto;
   }
 
   .icon-btn {
@@ -149,6 +267,50 @@
   .icon-btn:hover {
     color: #fff;
     background: #2a2b3d;
+  }
+
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    margin: 6px 8px;
+    background: #15162a;
+    border: 1px solid #2a2b3d;
+    border-radius: 6px;
+    transition: border-color 0.2s;
+  }
+
+  .search-bar:focus-within {
+    border-color: #4a6cf7;
+  }
+
+  .search-bar input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: #e0e0e0;
+    font-size: 12px;
+    outline: none;
+    min-width: 0;
+  }
+
+  .search-bar input::placeholder {
+    color: #555;
+  }
+
+  .clear-search {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    border-radius: 3px;
+  }
+
+  .clear-search:hover {
+    color: #ccc;
   }
 
   .sidebar-content {
@@ -180,5 +342,27 @@
   .sidebar-footer {
     padding: 8px 12px;
     border-top: 1px solid #2a2b3d;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .resize-handle {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+  }
+
+  .resize-handle:hover {
+    background: #4a6cf7;
+    opacity: 0.5;
   }
 </style>

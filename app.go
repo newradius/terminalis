@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -436,6 +438,110 @@ func (a *App) GetConfig() config.AppConfig {
 func (a *App) SaveConfig(cfg config.AppConfig) error {
 	a.config = cfg
 	return config.Save(a.store.DataDir(), cfg)
+}
+
+// ---- Duplicate Session ----
+
+func (a *App) DuplicateSession(id string) error {
+	sess := a.store.GetSession(id)
+	if sess == nil {
+		return fmt.Errorf("session not found")
+	}
+	dupe := *sess
+	dupe.ID = uuid.New().String()
+	dupe.Name = sess.Name + " (copy)"
+	dupe.CreatedAt = time.Now().Unix()
+	dupe.UpdatedAt = time.Now().Unix()
+	return a.store.SaveSession(dupe)
+}
+
+// ---- Import / Export ----
+
+func (a *App) ExportSessions() (string, error) {
+	data := a.store.ExportAll()
+	jsonBytes, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return "", err
+	}
+
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Export Sessions",
+		DefaultFilename: "terminalis-sessions.json",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "JSON Files", Pattern: "*.json"},
+		},
+	})
+	if err != nil || path == "" {
+		return "", err
+	}
+
+	if err := os.WriteFile(path, jsonBytes, 0600); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func (a *App) ImportSessions() (int, error) {
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Import Sessions",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "JSON Files", Pattern: "*.json"},
+		},
+	})
+	if err != nil || path == "" {
+		return 0, err
+	}
+
+	jsonBytes, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+
+	var data models.SessionData
+	if err := json.Unmarshal(jsonBytes, &data); err != nil {
+		return 0, fmt.Errorf("invalid JSON: %w", err)
+	}
+
+	count := 0
+	// Build ID mapping: old ID -> new ID
+	idMap := make(map[string]string)
+	for _, f := range data.Folders {
+		idMap[f.ID] = uuid.New().String()
+	}
+
+	// Import folders with remapped IDs
+	for _, f := range data.Folders {
+		oldID := f.ID
+		f.ID = idMap[oldID]
+		if f.ParentID != "" {
+			if mapped, ok := idMap[f.ParentID]; ok {
+				f.ParentID = mapped
+			} else {
+				f.ParentID = ""
+			}
+		}
+		f.Expanded = true
+		if err := a.store.SaveFolder(f); err == nil {
+			count++
+		}
+	}
+
+	// Import sessions with new IDs
+	for _, s := range data.Sessions {
+		s.ID = uuid.New().String()
+		if mapped, ok := idMap[s.FolderID]; ok {
+			s.FolderID = mapped
+		} else {
+			s.FolderID = ""
+		}
+		s.CreatedAt = time.Now().Unix()
+		s.UpdatedAt = time.Now().Unix()
+		if err := a.store.SaveSession(s); err == nil {
+			count++
+		}
+	}
+
+	return count, nil
 }
 
 // ---- File Picker ----

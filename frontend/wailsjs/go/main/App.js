@@ -22,6 +22,18 @@ export function DeleteSession(arg1) {
   return window['go']['main']['App']['DeleteSession'](arg1);
 }
 
+export function DuplicateSession(arg1) {
+  return window['go']['main']['App']['DuplicateSession'](arg1);
+}
+
+export function ExportSessions() {
+  return window['go']['main']['App']['ExportSessions']();
+}
+
+export function ImportSessions() {
+  return window['go']['main']['App']['ImportSessions']();
+}
+
 export function DisconnectTab(arg1) {
   return window['go']['main']['App']['DisconnectTab'](arg1);
 }

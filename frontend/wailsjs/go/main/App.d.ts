@@ -15,6 +15,12 @@ export function DeleteFolder(arg1:string):Promise<void>;
 
 export function DeleteSession(arg1:string):Promise<void>;
 
+export function DuplicateSession(arg1:string):Promise<void>;
+
+export function ExportSessions():Promise<string>;
+
+export function ImportSessions():Promise<number>;
+
 export function DisconnectTab(arg1:string):Promise<void>;
 
 export function GetAvailableShells():Promise<Array<terminal.ShellInfo>>;
