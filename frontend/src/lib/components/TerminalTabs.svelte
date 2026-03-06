@@ -1,7 +1,13 @@
 <script lang="ts">
   import { tabs, activeTabId, closeTab } from "../stores/terminals";
-  import { DisconnectTab } from "../../../wailsjs/go/main/App";
+  import { DisconnectTab, IsSSHSession } from "../../../wailsjs/go/main/App";
   import TerminalView from "./TerminalView.svelte";
+  import ScpPanel from "./ScpPanel.svelte";
+
+  let scpOpen = false;
+  let scpWidth = 320;
+  let isResizingScp = false;
+  let isCurrentSSH = false;
 
   function openLocalTerminal() {
     window.dispatchEvent(new CustomEvent("open-local-terminal", { detail: {} }));
@@ -17,11 +23,41 @@
     closeTab(id);
   }
 
-  // Middle-click to close tab
   function handleMouseDown(e: MouseEvent, id: string) {
     if (e.button === 1) {
       e.preventDefault();
       DisconnectTab(id).then(() => closeTab(id));
+    }
+  }
+
+  function toggleScp() {
+    scpOpen = !scpOpen;
+  }
+
+  function startScpResize(e: MouseEvent) {
+    isResizingScp = true;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = scpWidth;
+    const onMove = (ev: MouseEvent) => {
+      scpWidth = Math.max(200, Math.min(600, startWidth + (ev.clientX - startX)));
+    };
+    const onUp = () => {
+      isResizingScp = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  // Check if current tab is SSH
+  $: {
+    const currentId = $activeTabId;
+    if (currentId) {
+      IsSSHSession(currentId).then((v) => { isCurrentSSH = v; });
+    } else {
+      isCurrentSSH = false;
     }
   }
 </script>
@@ -52,11 +88,32 @@
           <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
       </button>
+      <div class="tab-bar-spacer"></div>
+      {#if isCurrentSSH}
+        <button class="scp-toggle" class:active={scpOpen} on:click={toggleScp} title="Toggle SCP file browser">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span>SCP</span>
+        </button>
+      {/if}
     </div>
-    <div class="terminal-panels">
-      {#each $tabs as tab (tab.id)}
-        <TerminalView tabId={tab.id} active={$activeTabId === tab.id} />
-      {/each}
+    <div class="terminal-content">
+      {#if scpOpen && isCurrentSSH && $activeTabId}
+        <div class="scp-container" style="width: {scpWidth}px; min-width: {scpWidth}px">
+          {#each $tabs as tab (tab.id)}
+            {#if tab.connected}
+              <ScpPanel tabId={tab.id} active={$activeTabId === tab.id} />
+            {/if}
+          {/each}
+          <div class="scp-resize-handle" on:mousedown={startScpResize}></div>
+        </div>
+      {/if}
+      <div class="terminal-panels">
+        {#each $tabs as tab (tab.id)}
+          <TerminalView tabId={tab.id} active={$activeTabId === tab.id} />
+        {/each}
+      </div>
     </div>
   {:else}
     <div class="empty-state">
@@ -175,6 +232,65 @@
   .tab-new:hover {
     color: #ccc;
     background: #252640;
+  }
+
+  .tab-bar-spacer {
+    flex: 1;
+  }
+
+  .scp-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    margin: 3px 6px;
+    background: #2a2b3d;
+    border: 1px solid #3a3b4d;
+    border-radius: 5px;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+
+  .scp-toggle:hover {
+    color: #ccc;
+    border-color: #4a6cf7;
+  }
+
+  .scp-toggle.active {
+    background: #4a6cf7;
+    border-color: #4a6cf7;
+    color: #fff;
+  }
+
+  .terminal-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .scp-container {
+    position: relative;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .scp-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+  }
+
+  .scp-resize-handle:hover {
+    background: #4a6cf7;
+    opacity: 0.5;
   }
 
   .terminal-panels {

@@ -199,6 +199,13 @@ func (c *Client) Done() <-chan struct{} {
 	return c.done
 }
 
+// Conn returns the underlying SSH client connection (for SFTP, etc.)
+func (c *Client) Conn() *gossh.Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn
+}
+
 func (c *Client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

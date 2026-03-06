@@ -23,6 +23,8 @@ type ActiveSession struct {
 	session   terminal.TerminalSession
 	sessionID string
 	cancel    context.CancelFunc
+	sshClient *ssh.Client      // non-nil only for SSH sessions
+	sftp      *ssh.SftpSession // lazily created
 }
 
 type App struct {
@@ -67,6 +69,9 @@ func (a *App) shutdown(ctx context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for _, as := range a.activeSessions {
+		if as.sftp != nil {
+			as.sftp.Close()
+		}
 		as.cancel()
 		as.session.Close()
 	}
@@ -226,6 +231,7 @@ func (a *App) connectSSH(tabID string, cfg ssh.ConnectConfig) error {
 		session:   client,
 		sessionID: tabID,
 		cancel:    cancel,
+		sshClient: client,
 	}
 	a.mu.Unlock()
 
@@ -414,6 +420,9 @@ func (a *App) DisconnectTab(tabID string) {
 	a.mu.Unlock()
 
 	if ok {
+		if as.sftp != nil {
+			as.sftp.Close()
+		}
 		as.cancel()
 		as.session.Close()
 	}
@@ -438,6 +447,163 @@ func (a *App) GetConfig() config.AppConfig {
 func (a *App) SaveConfig(cfg config.AppConfig) error {
 	a.config = cfg
 	return config.Save(a.store.DataDir(), cfg)
+}
+
+// ---- SFTP / SCP ----
+
+// ensureSftp lazily creates an SFTP session for the given tab.
+func (a *App) ensureSftp(tabID string) (*ssh.SftpSession, *ssh.Client, error) {
+	a.mu.Lock()
+	as, ok := a.activeSessions[tabID]
+	a.mu.Unlock()
+
+	if !ok {
+		return nil, nil, fmt.Errorf("no active session for tab %s", tabID)
+	}
+	if as.sshClient == nil {
+		return nil, nil, fmt.Errorf("not an SSH session")
+	}
+
+	if as.sftp != nil {
+		return as.sftp, as.sshClient, nil
+	}
+
+	conn := as.sshClient.Conn()
+	if conn == nil {
+		return nil, nil, fmt.Errorf("SSH connection closed")
+	}
+
+	sftp, err := ssh.NewSftpSession(conn)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	a.mu.Lock()
+	as.sftp = sftp
+	a.mu.Unlock()
+
+	return sftp, as.sshClient, nil
+}
+
+type SftpListResult struct {
+	Path  string          `json:"path"`
+	Files []ssh.FileEntry `json:"files"`
+}
+
+func (a *App) SftpListDir(tabID string, dirPath string) (*SftpListResult, error) {
+	sftp, _, err := a.ensureSftp(tabID)
+	if err != nil {
+		return nil, err
+	}
+
+	if dirPath == "" || dirPath == "~" {
+		dirPath = sftp.GetHome()
+	}
+
+	files, err := sftp.ListDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SftpListResult{
+		Path:  dirPath,
+		Files: files,
+	}, nil
+}
+
+func (a *App) SftpDownloadFile(tabID string, remotePath string) error {
+	sftp, _, err := a.ensureSftp(tabID)
+	if err != nil {
+		return err
+	}
+
+	// Get just the filename for the save dialog default
+	parts := splitPath(remotePath)
+	defaultName := "file"
+	if len(parts) > 0 {
+		defaultName = parts[len(parts)-1]
+	}
+
+	localPath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save File",
+		DefaultFilename: defaultName,
+	})
+	if err != nil || localPath == "" {
+		return err
+	}
+
+	return sftp.ReadFileToLocal(remotePath, localPath)
+}
+
+func (a *App) SftpUploadFile(tabID string, remoteDir string) error {
+	sftp, _, err := a.ensureSftp(tabID)
+	if err != nil {
+		return err
+	}
+
+	localPath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select File to Upload",
+	})
+	if err != nil || localPath == "" {
+		return err
+	}
+
+	// Extract filename from local path
+	localParts := splitPath(localPath)
+	fileName := localParts[len(localParts)-1]
+	remotePath := remoteDir + "/" + fileName
+
+	return sftp.UploadFile(localPath, remotePath)
+}
+
+func (a *App) SftpGetPwd(tabID string) (string, error) {
+	_, sshClient, err := a.ensureSftp(tabID)
+	if err != nil {
+		return "", err
+	}
+
+	conn := sshClient.Conn()
+	if conn == nil {
+		return "", fmt.Errorf("SSH connection closed")
+	}
+
+	return ssh.ExecPwd(conn)
+}
+
+func (a *App) SftpGetHome(tabID string) (string, error) {
+	sftp, _, err := a.ensureSftp(tabID)
+	if err != nil {
+		return "", err
+	}
+	return sftp.GetHome(), nil
+}
+
+// IsSSHSession returns true if the tab is an SSH session (not local terminal).
+func (a *App) IsSSHSession(tabID string) bool {
+	a.mu.Lock()
+	as, ok := a.activeSessions[tabID]
+	a.mu.Unlock()
+	return ok && as.sshClient != nil
+}
+
+func splitPath(p string) []string {
+	var parts []string
+	for _, s := range []string{"/", "\\"} {
+		if idx := lastIndexOf(p, s); idx >= 0 {
+			parts = append(parts, p[idx+1:])
+			return parts
+		}
+	}
+	return []string{p}
+}
+
+func lastIndexOf(s, sep string) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == sep[0] {
+			return i
+		}
+	}
+	return -1
 }
 
 // ---- Duplicate Session ----

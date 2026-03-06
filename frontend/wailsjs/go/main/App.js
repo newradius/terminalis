@@ -58,6 +58,10 @@ export function ImportSessions() {
   return window['go']['main']['App']['ImportSessions']();
 }
 
+export function IsSSHSession(arg1) {
+  return window['go']['main']['App']['IsSSHSession'](arg1);
+}
+
 export function MoveFolder(arg1, arg2) {
   return window['go']['main']['App']['MoveFolder'](arg1, arg2);
 }
@@ -96,6 +100,26 @@ export function SelectPrivateKeyFile() {
 
 export function SendInput(arg1, arg2) {
   return window['go']['main']['App']['SendInput'](arg1, arg2);
+}
+
+export function SftpDownloadFile(arg1, arg2) {
+  return window['go']['main']['App']['SftpDownloadFile'](arg1, arg2);
+}
+
+export function SftpGetHome(arg1) {
+  return window['go']['main']['App']['SftpGetHome'](arg1);
+}
+
+export function SftpGetPwd(arg1) {
+  return window['go']['main']['App']['SftpGetPwd'](arg1);
+}
+
+export function SftpListDir(arg1, arg2) {
+  return window['go']['main']['App']['SftpListDir'](arg1, arg2);
+}
+
+export function SftpUploadFile(arg1, arg2) {
+  return window['go']['main']['App']['SftpUploadFile'](arg1, arg2);
 }
 
 export function ToggleFolderExpanded(arg1) {

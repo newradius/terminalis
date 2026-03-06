@@ -33,6 +33,8 @@ export function GetSessionTree():Promise<Array<models.TreeNode>>;
 
 export function ImportSessions():Promise<number>;
 
+export function IsSSHSession(arg1:string):Promise<boolean>;
+
 export function MoveFolder(arg1:string,arg2:string):Promise<void>;
 
 export function MoveSession(arg1:string,arg2:string):Promise<void>;
@@ -52,5 +54,15 @@ export function SaveSession(arg1:models.Session):Promise<void>;
 export function SelectPrivateKeyFile():Promise<string>;
 
 export function SendInput(arg1:string,arg2:string):Promise<void>;
+
+export function SftpDownloadFile(arg1:string,arg2:string):Promise<void>;
+
+export function SftpGetHome(arg1:string):Promise<string>;
+
+export function SftpGetPwd(arg1:string):Promise<string>;
+
+export function SftpListDir(arg1:string,arg2:string):Promise<main.SftpListResult>;
+
+export function SftpUploadFile(arg1:string,arg2:string):Promise<void>;
 
 export function ToggleFolderExpanded(arg1:string):Promise<void>;
