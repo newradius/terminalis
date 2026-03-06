@@ -19,7 +19,8 @@
       "Bash(wsl:*)",
       "Bash(docker:*)",
       "Bash(MSYS_NO_PATHCONV=1 docker run:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(npx svelte-check:*)"
     ]
   }
 }
