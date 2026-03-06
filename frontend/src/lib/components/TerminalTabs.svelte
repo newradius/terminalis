@@ -51,10 +51,12 @@
     window.addEventListener("mouseup", onUp);
   }
 
-  // Check if current tab is SSH
+  // Check if current tab is SSH — re-check when tabs change (connection status)
   $: {
     const currentId = $activeTabId;
-    if (currentId) {
+    const currentTabs = $tabs; // subscribe to tab changes (connected status)
+    const activeTab = currentTabs.find(t => t.id === currentId);
+    if (currentId && activeTab?.connected) {
       IsSSHSession(currentId).then((v) => { isCurrentSSH = v; });
     } else {
       isCurrentSSH = false;
