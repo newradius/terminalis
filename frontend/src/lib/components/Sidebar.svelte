@@ -164,18 +164,6 @@
       <span class="session-count">{totalSessions}</span>
     {/if}
     <div class="sidebar-actions">
-      {#if isCurrentSSH}
-        <button
-          class="icon-btn scp-toggle-btn"
-          class:active={showScp}
-          on:click={() => showScp = !showScp}
-          title={showScp ? "Show sessions" : "Show SCP files"}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-          </svg>
-        </button>
-      {/if}
       {#if !showScp}
         <button class="icon-btn" on:click={openLocalTerminal} title="Open Terminal (Ctrl+T)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -234,8 +222,8 @@
       <SessionTree {searchQuery} />
     </div>
   {/if}
-  {#if !showScp}
-    <div class="sidebar-footer">
+  <div class="sidebar-footer">
+    {#if !showScp}
       <button class="icon-btn" on:click={handleImport} title="Import Sessions">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -250,15 +238,30 @@
           <line x1="12" y1="3" x2="12" y2="15"/>
         </svg>
       </button>
-      <div class="spacer"></div>
+    {/if}
+    <div class="spacer"></div>
+    {#if isCurrentSSH}
+      <button
+        class="sftp-btn"
+        class:active={showScp}
+        on:click={() => showScp = !showScp}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        {showScp ? "Sessions" : "SFTP"}
+      </button>
+    {/if}
+    <div class="spacer"></div>
+    {#if !showScp}
       <button class="icon-btn" on:click={() => showSettings.set(true)} title="Settings">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
       </button>
-    </div>
-  {/if}
+    {/if}
+  </div>
   <div class="resize-handle" on:mousedown={startResize}></div>
 </aside>
 
@@ -419,9 +422,28 @@
     opacity: 0.5;
   }
 
-  .scp-toggle-btn.active {
+  .sftp-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border: 1px solid #4a6cf7;
+    border-radius: 4px;
+    background: none;
     color: #4a6cf7;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .sftp-btn:hover {
     background: rgba(74, 108, 247, 0.15);
+  }
+
+  .sftp-btn.active {
+    background: #4a6cf7;
+    color: #fff;
   }
 
   .scp-view {
