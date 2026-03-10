@@ -45,9 +45,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
 
-      - name: Build
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: wails build -platform ${{ matrix.platform }} -tags webkit2_41
+
+      - name: Build (non-Linux)
+        if: runner.os != 'Linux'
         run: wails build -platform ${{ matrix.platform }}
 
       - name: Upload Windows artifact
