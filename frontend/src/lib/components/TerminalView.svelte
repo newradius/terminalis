@@ -3,7 +3,7 @@
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import { WebLinksAddon } from "@xterm/addon-web-links";
-  import { SendInput, ResizeTerminal, DisconnectTab, SaveCommandToHistory, GetCommandHistory } from "../../../wailsjs/go/main/App";
+  import { SendInput, ResizeTerminal, DisconnectTab, SaveCommandToHistory, GetCommandHistory, FetchRemoteCompletions } from "../../../wailsjs/go/main/App";
   import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
   import { setTabConnected } from "../stores/terminals";
   import { appConfig } from "../stores/config";
@@ -22,6 +22,8 @@
 
   // Autosuggestion state
   let commandHistory: string[] = [];
+  let remoteHistory: string[] = [];
+  let remoteCommands: string[] = [];
   let currentInput = "";
   let currentSuggestion = "";
 
@@ -30,9 +32,31 @@
       currentSuggestion = "";
       return;
     }
-    const match = commandHistory.find((h) =>
+
+    const isFirstWord = !currentInput.includes(" ");
+
+    // Search local history first (full line match)
+    let match = commandHistory.find((h) =>
       h.startsWith(currentInput) && h !== currentInput
     );
+
+    // Then remote history (full line match)
+    if (!match) {
+      match = remoteHistory.find((h) =>
+        h.startsWith(currentInput) && h !== currentInput
+      );
+    }
+
+    // Then remote commands (first word only)
+    if (!match && isFirstWord) {
+      const cmdMatch = remoteCommands.find((c) =>
+        c.startsWith(currentInput) && c !== currentInput
+      );
+      if (cmdMatch) {
+        match = cmdMatch;
+      }
+    }
+
     currentSuggestion = match ? match.slice(currentInput.length) : "";
   }
 
@@ -208,6 +232,14 @@
         commandHistory = h || [];
       });
     }
+
+    // Fetch remote completions for SSH sessions (non-blocking)
+    FetchRemoteCompletions(tabId).then((r) => {
+      if (r) {
+        remoteHistory = r.history || [];
+        remoteCommands = r.commands || [];
+      }
+    }).catch(() => {});
 
     // Handle resize
     resizeObserver = new ResizeObserver(() => {
