@@ -2,7 +2,7 @@
   import { sessionTree, showSessionForm, editingSession, showFolderForm, editingFolder, selectedFolderId } from "../stores/sessions";
   import { createTab } from "../stores/terminals";
   import type { TreeNode } from "../types";
-  import { GetSessionTree, ToggleFolderExpanded, DeleteSession, DeleteFolder, MoveSession, MoveFolder, ConnectSessionExternal, DuplicateSession } from "../../../wailsjs/go/main/App";
+  import { GetSessionTree, ToggleFolderExpanded, DeleteSession, DeleteFolder, DeleteFolderWithContents, MoveSession, MoveFolder, ConnectSessionExternal, DuplicateSession } from "../../../wailsjs/go/main/App";
   import { onMount } from "svelte";
 
   export let searchQuery: string = "";
@@ -109,11 +109,13 @@
     closeContextMenu();
   }
 
-  async function executeDelete() {
+  async function executeDelete(deleteContents = false) {
     if (!confirmDelete) return;
     const node = confirmDelete.node;
     if (node.type === "session") {
       await DeleteSession(node.id);
+    } else if (deleteContents) {
+      await DeleteFolderWithContents(node.id);
     } else {
       await DeleteFolder(node.id);
     }
@@ -348,14 +350,20 @@
       </div>
       <p>
         Are you sure you want to delete <strong>{confirmDelete.node.name}</strong>?
-        {#if confirmDelete.node.type === "folder"}
-          Sessions inside will be moved to the root level.
-        {/if}
       </p>
-      <div class="confirm-actions">
-        <button class="btn-secondary" on:click={cancelDelete}>Cancel</button>
-        <button class="btn-danger" on:click={executeDelete}>Delete</button>
-      </div>
+      {#if confirmDelete.node.type === "folder" && confirmDelete.node.children && confirmDelete.node.children.length > 0}
+        <p class="confirm-hint">This folder has {countChildren(confirmDelete.node)} item{countChildren(confirmDelete.node) !== 1 ? "s" : ""} inside.</p>
+        <div class="confirm-actions">
+          <button class="btn-secondary" on:click={cancelDelete}>Cancel</button>
+          <button class="btn-secondary" on:click={() => executeDelete(false)}>Keep Contents</button>
+          <button class="btn-danger" on:click={() => executeDelete(true)}>Delete All</button>
+        </div>
+      {:else}
+        <div class="confirm-actions">
+          <button class="btn-secondary" on:click={cancelDelete}>Cancel</button>
+          <button class="btn-danger" on:click={() => executeDelete(false)}>Delete</button>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -554,5 +562,11 @@
 
   .btn-danger:hover {
     background: #6c2828;
+  }
+
+  .confirm-hint {
+    color: #ccc;
+    font-size: 12px;
+    margin: 0 0 16px;
   }
 </style>

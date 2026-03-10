@@ -116,8 +116,16 @@ func (a *App) SaveFolder(folder models.Folder) error {
 	return a.store.SaveFolder(folder)
 }
 
+func (a *App) GetFolderByID(id string) *models.Folder {
+	return a.store.GetFolderByID(id)
+}
+
 func (a *App) DeleteFolder(id string) error {
 	return a.store.DeleteFolder(id)
+}
+
+func (a *App) DeleteFolderWithContents(id string) error {
+	return a.store.DeleteFolderWithContents(id)
 }
 
 func (a *App) ToggleFolderExpanded(id string) error {

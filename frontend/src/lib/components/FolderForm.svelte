@@ -1,6 +1,6 @@
 <script lang="ts">
   import { showFolderForm, editingFolder, sessionTree } from "../stores/sessions";
-  import { SaveFolder, GetSessionTree } from "../../../wailsjs/go/main/App";
+  import { SaveFolder, GetSessionTree, GetFolderByID } from "../../../wailsjs/go/main/App";
   import { onMount } from "svelte";
 
   let name = "";
@@ -11,8 +11,11 @@
 
   onMount(async () => {
     if ($editingFolder) {
-      // Find folder in tree to get current values
-      // For simplicity, we just edit name and color
+      const folder = await GetFolderByID($editingFolder);
+      if (folder) {
+        name = folder.name;
+        color = folder.color || "#6c7086";
+      }
     }
   });
 

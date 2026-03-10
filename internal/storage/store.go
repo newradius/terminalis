@@ -173,6 +173,44 @@ func (s *Store) DeleteFolder(id string) error {
 	return s.save()
 }
 
+func (s *Store) DeleteFolderWithContents(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Collect all folder IDs to delete (recursive)
+	toDelete := map[string]bool{id: true}
+	changed := true
+	for changed {
+		changed = false
+		for _, f := range s.data.Folders {
+			if toDelete[f.ParentID] && !toDelete[f.ID] {
+				toDelete[f.ID] = true
+				changed = true
+			}
+		}
+	}
+
+	// Remove sessions in any of the deleted folders
+	sessions := make([]models.Session, 0, len(s.data.Sessions))
+	for _, sess := range s.data.Sessions {
+		if !toDelete[sess.FolderID] {
+			sessions = append(sessions, sess)
+		}
+	}
+	s.data.Sessions = sessions
+
+	// Remove all deleted folders
+	folders := make([]models.Folder, 0, len(s.data.Folders))
+	for _, f := range s.data.Folders {
+		if !toDelete[f.ID] {
+			folders = append(folders, f)
+		}
+	}
+	s.data.Folders = folders
+
+	return s.save()
+}
+
 func (s *Store) GetTree() []models.TreeNode {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
