@@ -67,14 +67,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: build/bin/Terminalis.app
+          path: build/bin/Terminalis.app/
 
       - name: Upload Linux artifact
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: build/bin/Terminalis
+          path: build/bin/
 
   release:
     needs: build
@@ -88,11 +88,14 @@ jobs:
         with:
           path: artifacts
 
+      - name: List artifacts
+        run: find artifacts/ -type f
+
       - name: Package artifacts
         run: |
           cp artifacts/Terminalis-windows-amd64/Terminalis.exe Terminalis-windows-amd64.exe
-          cd artifacts && zip -r ../Terminalis-macos-universal.zip Terminalis-macos-universal/
-          cp artifacts/Terminalis-linux-amd64/Terminalis Terminalis-linux-amd64
+          cd artifacts/Terminalis-macos-universal && zip -r ../../Terminalis-macos-universal.zip Terminalis.app/
+          cp "$(find artifacts/Terminalis-linux-amd64 -type f | head -1)" Terminalis-linux-amd64
           chmod +x Terminalis-linux-amd64
 
       - name: Create Release
