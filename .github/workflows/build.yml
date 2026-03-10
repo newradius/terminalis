@@ -94,7 +94,9 @@ jobs:
       - name: Package artifacts
         run: |
           cp artifacts/Terminalis-windows-amd64/Terminalis.exe Terminalis-windows-amd64.exe
-          cd artifacts/Terminalis-macos-universal && zip -r ../../Terminalis-macos-universal.zip Terminalis.app/
+          mkdir -p Terminalis.app
+          cp -r artifacts/Terminalis-macos-universal/* Terminalis.app/
+          zip -r Terminalis-macos-universal.zip Terminalis.app/
           cp "$(find artifacts/Terminalis-linux-amd64 -type f | head -1)" Terminalis-linux-amd64
           chmod +x Terminalis-linux-amd64
 
