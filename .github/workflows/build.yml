@@ -90,16 +90,16 @@ jobs:
 
       - name: Package artifacts
         run: |
-          cd artifacts
-          zip -r ../Terminalis-windows-amd64.zip Terminalis-windows-amd64/
-          zip -r ../Terminalis-macos-universal.zip Terminalis-macos-universal/
-          tar -czf ../Terminalis-linux-amd64.tar.gz Terminalis-linux-amd64/
+          cp artifacts/Terminalis-windows-amd64/Terminalis.exe Terminalis-windows-amd64.exe
+          cd artifacts && zip -r ../Terminalis-macos-universal.zip Terminalis-macos-universal/
+          cp artifacts/Terminalis-linux-amd64/Terminalis Terminalis-linux-amd64
+          chmod +x Terminalis-linux-amd64
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            Terminalis-windows-amd64.zip
+            Terminalis-windows-amd64.exe
             Terminalis-macos-universal.zip
-            Terminalis-linux-amd64.tar.gz
+            Terminalis-linux-amd64
           generate_release_notes: true
