@@ -3,18 +3,49 @@
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import { WebLinksAddon } from "@xterm/addon-web-links";
-  import { SendInput, ResizeTerminal, DisconnectTab } from "../../../wailsjs/go/main/App";
+  import { SendInput, ResizeTerminal, DisconnectTab, SaveCommandToHistory, GetCommandHistory } from "../../../wailsjs/go/main/App";
   import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
   import { setTabConnected } from "../stores/terminals";
   import { appConfig } from "../stores/config";
 
   export let tabId: string;
   export let active: boolean = false;
+  export let historyId: string = "";
 
   let container: HTMLDivElement;
   let terminal: Terminal;
   let fitAddon: FitAddon;
   let resizeObserver: ResizeObserver;
+
+  // Autosuggestion state
+  let commandHistory: string[] = [];
+  let currentInput = "";
+  let currentSuggestion = "";
+
+  function updateSuggestion() {
+    if (!currentInput) {
+      currentSuggestion = "";
+      return;
+    }
+    const match = commandHistory.find((h) =>
+      h.startsWith(currentInput) && h !== currentInput
+    );
+    currentSuggestion = match ? match.slice(currentInput.length) : "";
+  }
+
+  let ghostLeft = 0;
+  let ghostTop = 0;
+
+  function updateGhostPosition() {
+    if (!terminal || !currentSuggestion) return;
+    const cursorX = terminal.buffer.active.cursorX;
+    const cursorY = terminal.buffer.active.cursorY;
+    const renderer = (terminal as any)._core._renderService;
+    const cellWidth = renderer?.dimensions?.css?.cell?.width || ($appConfig.fontSize * 0.6);
+    const cellHeight = renderer?.dimensions?.css?.cell?.height || ($appConfig.fontSize * 1.2);
+    ghostLeft = cursorX * cellWidth + 4;
+    ghostTop = cursorY * cellHeight + 4;
+  }
 
   onMount(() => {
     terminal = new Terminal({
@@ -52,16 +83,77 @@
     terminal.loadAddon(new WebLinksAddon());
 
     terminal.open(container);
+
+    // Accept suggestion with Right Arrow or End key
+    terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      if (!currentSuggestion) return true;
+      if (e.type !== "keydown") return true;
+
+      if (e.key === "ArrowRight" || e.key === "End") {
+        e.preventDefault();
+        const bytes = new TextEncoder().encode(currentSuggestion);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        SendInput(tabId, btoa(binary)).catch(() => {});
+        currentInput += currentSuggestion;
+        currentSuggestion = "";
+        return false;
+      }
+
+      return true;
+    });
+
     fitAddon.fit();
 
     // Send input to backend (encode string as UTF-8 bytes, then base64)
     terminal.onData((data) => {
+      // Send raw data to backend (unchanged)
       const bytes = new TextEncoder().encode(data);
       let binary = "";
       for (let i = 0; i < bytes.length; i++) {
         binary += String.fromCharCode(bytes[i]);
       }
       SendInput(tabId, btoa(binary)).catch(() => {});
+
+      // Track input buffer for autosuggestions
+      if (data === "\r" || data === "\n") {
+        const cmd = currentInput.trim();
+        if (cmd && historyId) {
+          SaveCommandToHistory(historyId, cmd).catch(() => {});
+          commandHistory = commandHistory.filter((h) => h !== cmd);
+          commandHistory.unshift(cmd);
+        }
+        currentInput = "";
+        currentSuggestion = "";
+      } else if (data === "\x7f" || data === "\b") {
+        currentInput = currentInput.slice(0, -1);
+        updateSuggestion();
+      } else if (data === "\x03") {
+        currentInput = "";
+        currentSuggestion = "";
+      } else if (data === "\x15") {
+        currentInput = "";
+        currentSuggestion = "";
+      } else if (data === "\x17") {
+        currentInput = currentInput.trimEnd().replace(/\S+$/, "").trimEnd();
+        updateSuggestion();
+      } else if (data.length > 1 && (data.charCodeAt(0) === 27 || data.length > 4)) {
+        if (data.charCodeAt(0) === 27) {
+          currentInput = "";
+          currentSuggestion = "";
+        } else {
+          currentInput += data;
+          currentSuggestion = "";
+        }
+      } else if (data >= " ") {
+        currentInput += data;
+        updateSuggestion();
+      } else {
+        currentInput = "";
+        currentSuggestion = "";
+      }
     });
 
     // Receive output from backend (decode base64 to raw bytes for proper UTF-8)
@@ -107,6 +199,13 @@
     // Connection established
     setTabConnected(tabId, true);
 
+    // Load command history for autosuggestions
+    if (historyId) {
+      GetCommandHistory(historyId).then((h) => {
+        commandHistory = h || [];
+      });
+    }
+
     // Handle resize
     resizeObserver = new ResizeObserver(() => {
       if (active) {
@@ -140,19 +239,40 @@
     terminal.options.theme = { ...terminal.options.theme, background: $appConfig.terminalBackground };
     fitAddon.fit();
   }
+
+  // Update ghost position when suggestion changes
+  $: if (currentSuggestion && terminal) {
+    setTimeout(updateGhostPosition, 0);
+  }
 </script>
 
-<div class="terminal-container" class:visible={active} bind:this={container}></div>
+<div class="terminal-wrapper" class:visible={active}>
+  <div class="terminal-container" bind:this={container}></div>
+  {#if currentSuggestion}
+    <div
+      class="ghost-suggestion"
+      style="left: {ghostLeft}px; top: {ghostTop}px; font-size: {$appConfig.fontSize}px;"
+    >
+      {currentSuggestion}
+    </div>
+  {/if}
+</div>
 
 <style>
-  .terminal-container {
+  .terminal-wrapper {
     width: 100%;
     height: 100%;
     display: none;
+    position: relative;
   }
 
-  .terminal-container.visible {
+  .terminal-wrapper.visible {
     display: block;
+  }
+
+  .terminal-container {
+    width: 100%;
+    height: 100%;
   }
 
   .terminal-container :global(.xterm) {
@@ -175,5 +295,15 @@
   .terminal-container :global(.xterm-viewport::-webkit-scrollbar-thumb) {
     background: #3a3b4d;
     border-radius: 4px;
+  }
+
+  .ghost-suggestion {
+    position: absolute;
+    color: #555;
+    pointer-events: none;
+    white-space: pre;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    z-index: 1;
+    opacity: 0.5;
   }
 </style>
