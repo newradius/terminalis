@@ -34,6 +34,10 @@ export function ExportSessions() {
   return window['go']['main']['App']['ExportSessions']();
 }
 
+export function FetchRemoteCompletions(arg1) {
+  return window['go']['main']['App']['FetchRemoteCompletions'](arg1);
+}
+
 export function GetAvailableShells() {
   return window['go']['main']['App']['GetAvailableShells']();
 }

@@ -234,7 +234,21 @@ export namespace models {
 }
 
 export namespace ssh {
-	
+
+	export class RemoteCompletions {
+	    history: string[];
+	    commands: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new RemoteCompletions(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.history = source["history"];
+	        this.commands = source["commands"];
+	    }
+	}
 	export class FileEntry {
 	    name: string;
 	    size: number;

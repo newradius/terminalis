@@ -508,6 +508,25 @@ func (a *App) GetCommandHistory(sessionID string) []string {
 	return history
 }
 
+// ---- Remote Completions ----
+
+func (a *App) FetchRemoteCompletions(tabID string) (*ssh.RemoteCompletions, error) {
+	a.mu.Lock()
+	as, ok := a.activeSessions[tabID]
+	a.mu.Unlock()
+
+	if !ok || as.sshClient == nil {
+		return nil, fmt.Errorf("no SSH session for tab %s", tabID)
+	}
+
+	conn := as.sshClient.Conn()
+	if conn == nil {
+		return nil, fmt.Errorf("SSH connection closed")
+	}
+
+	return ssh.FetchCompletions(conn), nil
+}
+
 // ---- SFTP / SCP ----
 
 // ensureSftp lazily creates an SFTP session for the given tab.

@@ -4,6 +4,7 @@ import {main} from '../models';
 import {terminal} from '../models';
 import {config} from '../models';
 import {models} from '../models';
+import {ssh} from '../models';
 
 export function AcceptHostKey(arg1:boolean):Promise<void>;
 
@@ -20,6 +21,8 @@ export function DisconnectTab(arg1:string):Promise<void>;
 export function DuplicateSession(arg1:string):Promise<void>;
 
 export function ExportSessions():Promise<string>;
+
+export function FetchRemoteCompletions(arg1:string):Promise<ssh.RemoteCompletions>;
 
 export function GetAvailableShells():Promise<Array<terminal.ShellInfo>>;
 
