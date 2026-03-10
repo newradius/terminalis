@@ -1,8 +1,14 @@
-# Terminalis
+# <img src="ico.png" width="32" height="32" alt="Terminalis icon" /> Terminalis
 
 A cross-platform SSH session manager and terminal emulator built with Go, Svelte, and xterm.js. Manage your SSH connections, organize them in folders, transfer files, and work with multiple terminal tabs — all from a single native desktop app.
 
 > Heavily vibe coded by **Sabin Petru**.
+
+<p>
+  <img src="docs/screenshots/interface.png" width="280" alt="Interface" />
+  <img src="docs/screenshots/ssh_connect_dialog.png" width="280" alt="SSH Connect Dialog" />
+  <img src="docs/screenshots/auto_complete.png" width="280" alt="Autosuggestions" />
+</p>
 
 ---
 
