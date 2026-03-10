@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -235,6 +236,8 @@ func (a *App) connectSSH(tabID string, cfg ssh.ConnectConfig) error {
 	}
 	a.mu.Unlock()
 
+	runtime.EventsEmit(a.ctx, "ssh:connected", tabID)
+
 	a.startSessionIO(tabID, client, ctx)
 
 	return nil
@@ -449,6 +452,62 @@ func (a *App) SaveConfig(cfg config.AppConfig) error {
 	return config.Save(a.store.DataDir(), cfg)
 }
 
+// ---- Command History ----
+
+func (a *App) SaveCommandToHistory(sessionID string, command string) error {
+	if sessionID == "" || command == "" {
+		return nil
+	}
+
+	histDir := filepath.Join(a.store.DataDir(), "history")
+	if err := os.MkdirAll(histDir, 0700); err != nil {
+		return err
+	}
+
+	histFile := filepath.Join(histDir, sessionID+".json")
+
+	var history []string
+	if data, err := os.ReadFile(histFile); err == nil {
+		json.Unmarshal(data, &history)
+	}
+
+	// Remove duplicate if exists
+	for i, h := range history {
+		if h == command {
+			history = append(history[:i], history[i+1:]...)
+			break
+		}
+	}
+
+	// Prepend (most recent first)
+	history = append([]string{command}, history...)
+
+	// Cap at 1000
+	if len(history) > 1000 {
+		history = history[:1000]
+	}
+
+	data, err := json.Marshal(history)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(histFile, data, 0600)
+}
+
+func (a *App) GetCommandHistory(sessionID string) []string {
+	if sessionID == "" {
+		return nil
+	}
+
+	histFile := filepath.Join(a.store.DataDir(), "history", sessionID+".json")
+
+	var history []string
+	if data, err := os.ReadFile(histFile); err == nil {
+		json.Unmarshal(data, &history)
+	}
+	return history
+}
+
 // ---- SFTP / SCP ----
 
 // ensureSftp lazily creates an SFTP session for the given tab.
@@ -554,6 +613,73 @@ func (a *App) SftpUploadFile(tabID string, remoteDir string) error {
 	remotePath := remoteDir + "/" + fileName
 
 	return sftp.UploadFile(localPath, remotePath)
+}
+
+// SftpUploadPaths uploads local files (by absolute path) to the remote directory.
+func (a *App) SftpUploadPaths(tabID string, remoteDir string, localPaths []string) (int, error) {
+	sftpSession, _, err := a.ensureSftp(tabID)
+	if err != nil {
+		return 0, err
+	}
+
+	uploaded := 0
+	for _, lp := range localPaths {
+		info, err := os.Stat(lp)
+		if err != nil {
+			continue
+		}
+		if info.IsDir() {
+			continue // skip directories
+		}
+		fileName := filepath.Base(lp)
+		remotePath := remoteDir + "/" + fileName
+		if err := sftpSession.UploadFile(lp, remotePath); err != nil {
+			return uploaded, fmt.Errorf("failed to upload %s: %w", fileName, err)
+		}
+		uploaded++
+	}
+	return uploaded, nil
+}
+
+// SftpDownloadToDownloads downloads a remote file to the user's Downloads folder and returns the local path.
+func (a *App) SftpDownloadToDownloads(tabID string, remotePath string) (string, error) {
+	sftpSession, _, err := a.ensureSftp(tabID)
+	if err != nil {
+		return "", err
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot find home directory: %w", err)
+	}
+	downloadsDir := filepath.Join(homeDir, "Downloads")
+	if err := os.MkdirAll(downloadsDir, 0755); err != nil {
+		return "", err
+	}
+
+	parts := splitPath(remotePath)
+	fileName := "file"
+	if len(parts) > 0 {
+		fileName = parts[len(parts)-1]
+	}
+
+	localPath := filepath.Join(downloadsDir, fileName)
+	// Avoid overwriting: append (1), (2), etc.
+	if _, err := os.Stat(localPath); err == nil {
+		ext := filepath.Ext(fileName)
+		base := fileName[:len(fileName)-len(ext)]
+		for i := 1; ; i++ {
+			localPath = filepath.Join(downloadsDir, fmt.Sprintf("%s (%d)%s", base, i, ext))
+			if _, err := os.Stat(localPath); os.IsNotExist(err) {
+				break
+			}
+		}
+	}
+
+	if err := sftpSession.ReadFileToLocal(remotePath, localPath); err != nil {
+		return "", err
+	}
+	return localPath, nil
 }
 
 func (a *App) SftpGetPwd(tabID string) (string, error) {

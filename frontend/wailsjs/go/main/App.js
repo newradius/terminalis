@@ -42,6 +42,10 @@ export function GetAvailableTerminals() {
   return window['go']['main']['App']['GetAvailableTerminals']();
 }
 
+export function GetCommandHistory(arg1) {
+  return window['go']['main']['App']['GetCommandHistory'](arg1);
+}
+
 export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
@@ -82,6 +86,10 @@ export function ResizeTerminal(arg1, arg2, arg3) {
   return window['go']['main']['App']['ResizeTerminal'](arg1, arg2, arg3);
 }
 
+export function SaveCommandToHistory(arg1, arg2) {
+  return window['go']['main']['App']['SaveCommandToHistory'](arg1, arg2);
+}
+
 export function SaveConfig(arg1) {
   return window['go']['main']['App']['SaveConfig'](arg1);
 }
@@ -106,6 +114,10 @@ export function SftpDownloadFile(arg1, arg2) {
   return window['go']['main']['App']['SftpDownloadFile'](arg1, arg2);
 }
 
+export function SftpDownloadToDownloads(arg1, arg2) {
+  return window['go']['main']['App']['SftpDownloadToDownloads'](arg1, arg2);
+}
+
 export function SftpGetHome(arg1) {
   return window['go']['main']['App']['SftpGetHome'](arg1);
 }
@@ -120,6 +132,10 @@ export function SftpListDir(arg1, arg2) {
 
 export function SftpUploadFile(arg1, arg2) {
   return window['go']['main']['App']['SftpUploadFile'](arg1, arg2);
+}
+
+export function SftpUploadPaths(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SftpUploadPaths'](arg1, arg2, arg3);
 }
 
 export function ToggleFolderExpanded(arg1) {

@@ -25,6 +25,8 @@ export function GetAvailableShells():Promise<Array<terminal.ShellInfo>>;
 
 export function GetAvailableTerminals():Promise<Array<terminal.TerminalInfo>>;
 
+export function GetCommandHistory(arg1:string):Promise<Array<string>>;
+
 export function GetConfig():Promise<config.AppConfig>;
 
 export function GetSession(arg1:string):Promise<models.Session>;
@@ -45,6 +47,8 @@ export function QuickConnect(arg1:main.QuickConnectRequest):Promise<void>;
 
 export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void>;
 
+export function SaveCommandToHistory(arg1:string,arg2:string):Promise<void>;
+
 export function SaveConfig(arg1:config.AppConfig):Promise<void>;
 
 export function SaveFolder(arg1:models.Folder):Promise<void>;
@@ -57,6 +61,8 @@ export function SendInput(arg1:string,arg2:string):Promise<void>;
 
 export function SftpDownloadFile(arg1:string,arg2:string):Promise<void>;
 
+export function SftpDownloadToDownloads(arg1:string,arg2:string):Promise<string>;
+
 export function SftpGetHome(arg1:string):Promise<string>;
 
 export function SftpGetPwd(arg1:string):Promise<string>;
@@ -64,5 +70,7 @@ export function SftpGetPwd(arg1:string):Promise<string>;
 export function SftpListDir(arg1:string,arg2:string):Promise<main.SftpListResult>;
 
 export function SftpUploadFile(arg1:string,arg2:string):Promise<void>;
+
+export function SftpUploadPaths(arg1:string,arg2:string,arg3:Array<string>):Promise<number>;
 
 export function ToggleFolderExpanded(arg1:string):Promise<void>;
