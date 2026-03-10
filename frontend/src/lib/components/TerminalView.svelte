@@ -190,7 +190,12 @@
       for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i);
       }
-      terminal.write(bytes);
+      terminal.write(bytes, () => {
+        // Update ghost position after xterm processes output and cursor is updated
+        if (currentSuggestion) {
+          updateGhostPosition();
+        }
+      });
     });
 
     // Session closed
@@ -233,13 +238,22 @@
       });
     }
 
-    // Fetch remote completions for SSH sessions (non-blocking)
-    FetchRemoteCompletions(tabId).then((r) => {
-      if (r) {
-        remoteHistory = r.history || [];
-        remoteCommands = r.commands || [];
+    // Fetch remote completions for SSH sessions once connected
+    function fetchRemote() {
+      FetchRemoteCompletions(tabId).then((r) => {
+        if (r) {
+          remoteHistory = r.history || [];
+          remoteCommands = r.commands || [];
+        }
+      }).catch(() => {});
+    }
+    // Try immediately (may work if already connected), and also on ssh:connected
+    fetchRemote();
+    EventsOn("ssh:connected", (connectedTabId: string) => {
+      if (connectedTabId === tabId) {
+        fetchRemote();
       }
-    }).catch(() => {});
+    });
 
     // Handle resize
     resizeObserver = new ResizeObserver(() => {
@@ -254,6 +268,7 @@
   onDestroy(() => {
     EventsOff("terminal:data:" + tabId);
     EventsOff("terminal:closed:" + tabId);
+    EventsOff("ssh:connected");
     if (resizeObserver) resizeObserver.disconnect();
     if (terminal) terminal.dispose();
     DisconnectTab(tabId);
@@ -275,9 +290,9 @@
     fitAddon.fit();
   }
 
-  // Update ghost position when suggestion changes
-  $: if (currentSuggestion && terminal) {
-    setTimeout(updateGhostPosition, 0);
+  // Switch cursor style when suggestion is active so it doesn't occlude ghost text
+  $: if (terminal) {
+    terminal.options.cursorStyle = currentSuggestion ? "bar" : "block";
   }
 </script>
 

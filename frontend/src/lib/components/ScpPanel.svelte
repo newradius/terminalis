@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { SftpListDir, SftpDownloadFile, SftpUploadFile, SftpGetPwd, SftpGetHome } from "../../../wailsjs/go/main/App";
+  import { SftpListDir, SftpDownloadFile, SftpUploadFile, SftpUploadPaths, SftpDownloadToDownloads, SftpGetPwd, SftpGetHome } from "../../../wailsjs/go/main/App";
+  import { OnFileDrop, OnFileDropOff } from "../../../wailsjs/runtime/runtime";
 
   export let tabId: string;
   export let active: boolean = false;
@@ -22,14 +23,70 @@
   let sortColumn: "name" | "size" | "modTime" = "name";
   let sortAsc = true;
   let showHidden = true;
+  let dropHover = false;
+  let panelEl: HTMLDivElement;
 
   onMount(async () => {
+    OnFileDrop(handleFileDrop, true);
     await loadHome();
   });
 
   onDestroy(() => {
     stopFollowing();
+    OnFileDropOff();
   });
+
+  async function handleFileDrop(_x: number, _y: number, paths: string[]) {
+    if (!active || !paths || paths.length === 0) return;
+    dropHover = false;
+    try {
+      const count = await SftpUploadPaths(tabId, currentPath, paths);
+      await loadDir(currentPath);
+      window.dispatchEvent(new CustomEvent("toast-success", {
+        detail: { message: `Uploaded ${count} file${count !== 1 ? "s" : ""}` },
+      }));
+    } catch (err: any) {
+      window.dispatchEvent(new CustomEvent("connection-error", {
+        detail: { message: "Upload failed: " + err },
+      }));
+    }
+  }
+
+  function handleDragStart(e: DragEvent, entry: FileEntry) {
+    if (entry.isDir) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer?.setData("text/plain", entry.name);
+    e.dataTransfer!.effectAllowed = "copy";
+  }
+
+  async function handleDragEnd(e: DragEvent, entry: FileEntry) {
+    // If dropped outside the panel, prompt for directory and download there
+    if (entry.isDir) return;
+    const rect = panelEl?.getBoundingClientRect();
+    if (!rect) return;
+    const { clientX, clientY } = e;
+    const insidePanel =
+      clientX >= rect.left && clientX <= rect.right &&
+      clientY >= rect.top && clientY <= rect.bottom;
+    if (insidePanel) return;
+
+    const remotePath = currentPath === "/"
+      ? "/" + entry.name
+      : currentPath + "/" + entry.name;
+    try {
+      const localPath = await SftpDownloadToDownloads(tabId, remotePath);
+      const fileName = localPath.split(/[/\\]/).pop() || entry.name;
+      window.dispatchEvent(new CustomEvent("toast-success", {
+        detail: { message: `Downloaded ${fileName} to Downloads` },
+      }));
+    } catch (err: any) {
+      window.dispatchEvent(new CustomEvent("connection-error", {
+        detail: { message: "Download failed: " + err },
+      }));
+    }
+  }
 
   async function loadHome() {
     loading = true;
@@ -209,7 +266,24 @@
 </script>
 
 {#if active}
-<div class="scp-panel">
+<div
+  class="scp-panel"
+  class:drop-hover={dropHover}
+  bind:this={panelEl}
+  style="--wails-drop-target: drop"
+  on:wails-drop-target-active={() => dropHover = true}
+  on:wails-drop-target-inactive={() => dropHover = false}
+>
+  {#if dropHover}
+    <div class="drop-overlay">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <span>Drop files to upload</span>
+    </div>
+  {/if}
   <div class="scp-toolbar">
     <button class="scp-btn" on:click={goUp} title="Go up">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -295,7 +369,13 @@
             </tr>
           {/if}
           {#each sortedFiles as entry}
-            <tr class="file-row" on:dblclick={() => handleDoubleClick(entry)}>
+            <tr
+              class="file-row"
+              draggable={!entry.isDir}
+              on:dragstart={(e) => handleDragStart(e, entry)}
+              on:dragend={(e) => handleDragEnd(e, entry)}
+              on:dblclick={() => handleDoubleClick(entry)}
+            >
               <td class="col-name">
                 <span class="file-icon" class:dir-icon={entry.isDir}>
                   {#if entry.isDir}
@@ -347,9 +427,38 @@
     flex-direction: column;
     height: 100%;
     background: #1a1b2e;
-    border-left: 1px solid #2a2b3d;
     width: 100%;
     overflow: hidden;
+    position: relative;
+  }
+
+  .scp-panel.drop-hover {
+    outline: 2px dashed #4a6cf7;
+    outline-offset: -2px;
+  }
+
+  .drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(74, 108, 247, 0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    z-index: 10;
+    color: #4a6cf7;
+    font-size: 13px;
+    font-weight: 500;
+    pointer-events: none;
+  }
+
+  .file-row[draggable="true"] {
+    cursor: grab;
+  }
+
+  .file-row[draggable="true"]:active {
+    cursor: grabbing;
   }
 
   .scp-toolbar {

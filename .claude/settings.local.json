@@ -20,7 +20,13 @@
       "Bash(docker:*)",
       "Bash(MSYS_NO_PATHCONV=1 docker run:*)",
       "Bash(rm:*)",
-      "Bash(npx svelte-check:*)"
+      "Bash(npx svelte-check:*)",
+      "Bash(taskkill:*)",
+      "Bash(grep:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git update-index:*)",
+      "Bash(git remote:*)"
     ]
   }
 }
