@@ -12,6 +12,9 @@
   export let active: boolean = false;
   export let historyId: string = "";
 
+  const TERMINAL_FONT = "'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace";
+  const XTERM_PADDING = 4;
+
   let container: HTMLDivElement;
   let terminal: Terminal;
   let fitAddon: FitAddon;
@@ -43,15 +46,15 @@
     const renderer = (terminal as any)._core._renderService;
     const cellWidth = renderer?.dimensions?.css?.cell?.width || ($appConfig.fontSize * 0.6);
     const cellHeight = renderer?.dimensions?.css?.cell?.height || ($appConfig.fontSize * 1.2);
-    ghostLeft = cursorX * cellWidth + 4;
-    ghostTop = cursorY * cellHeight + 4;
+    ghostLeft = cursorX * cellWidth + XTERM_PADDING;
+    ghostTop = cursorY * cellHeight + XTERM_PADDING;
   }
 
   onMount(() => {
     terminal = new Terminal({
       cursorBlink: true,
       fontSize: $appConfig.fontSize,
-      fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace",
+      fontFamily: TERMINAL_FONT,
       theme: {
         background: $appConfig.terminalBackground,
         foreground: "#e0e0e0",
@@ -145,7 +148,7 @@
           currentSuggestion = "";
         } else {
           currentInput += data;
-          currentSuggestion = "";
+          updateSuggestion();
         }
       } else if (data >= " ") {
         currentInput += data;
@@ -251,7 +254,7 @@
   {#if currentSuggestion}
     <div
       class="ghost-suggestion"
-      style="left: {ghostLeft}px; top: {ghostTop}px; font-size: {$appConfig.fontSize}px;"
+      style="left: {ghostLeft}px; top: {ghostTop}px; font-size: {$appConfig.fontSize}px; font-family: {TERMINAL_FONT};"
     >
       {currentSuggestion}
     </div>
@@ -302,7 +305,6 @@
     color: #555;
     pointer-events: none;
     white-space: pre;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
     z-index: 1;
     opacity: 0.5;
   }
